@@ -9,14 +9,20 @@ st.set_page_config(page_title="ML Repair Pipeline", page_icon="🛡️", layout=
 st.title("🛡️ Automated ML Repair Pipeline")
 st.markdown("### Data Cleaning: Iterative Imputation & Outlier Removal")
 
+# Initialize Session State for persistence
+if "df_clean" not in st.session_state:
+    st.session_state.df_clean = None
+if "report" not in st.session_state:
+    st.session_state.report = None
+
 # 1. File Upload
 uploaded_file = st.file_uploader("Upload your messy CSV", type=["csv"])
 
 if uploaded_file is not None:
-    # Load Data
+
     df_raw = pd.read_csv(uploaded_file)
     
-    # Layout: Split screen for Before vs After
+    # Split screen for Before vs After
     col1, col2 = st.columns(2)
     
     with col1:
@@ -37,54 +43,101 @@ if uploaded_file is not None:
             # Run the Logic
             df_clean, report = repair_kit.repair(df_raw)
             
-            # Success Message
+            # Save to Session State
+            st.session_state.df_clean = df_clean
+            st.session_state.report = report
+            st.session_state.repair_kit = repair_kit # Save the object itself to reuse methods
+            
             st.success("Pipeline Execution Complete")
-            
-            with col2:
-                st.subheader("✅ Repaired Data")
-                st.write(f"Shape: {df_clean.shape}")
-                st.dataframe(df_clean.head(10))
-                
-                # Metrics Display
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Missing Fixed", report['missing_fixed'])
-                m2.metric("Outliers Removed", report['outliers_detected'])
-                m3.metric("Rows Retained", f"{report['final_shape'][0]}")
 
-            # 3. Validation Visualization (Updated)
-            st.divider()
-            st.subheader("📊 Distribution Check (Comparison)")
-            
-            # UPGRADE: Dynamic Column Selection
-            numeric_cols = df_clean.select_dtypes(include=['number']).columns
-            
-            if len(numeric_cols) > 0:
-                target_col = st.selectbox("Select Column to Visualize", numeric_cols)
-                
-                chart_col1, chart_col2 = st.columns(2)
-                
-                # Raw data (force numeric for plotting comparison)
-                raw_numeric = pd.to_numeric(df_raw[target_col], errors='coerce')
-                
-                with chart_col1:
-                    st.caption(f"Before: {target_col} Distribution")
-                    # UPGRADE: Using Plotly Histogram
-                    fig_before = px.histogram(raw_numeric, x=target_col, nbins=10, template="plotly_dark", color_discrete_sequence=['#FF4B4B'])
-                    fig_before.update_layout(bargap=0.1)
-                    st.plotly_chart(fig_before, use_container_width=True)
-                
-                with chart_col2:
-                    st.caption(f"After: {target_col} Distribution (Cleaned)")
-                    fig_after = px.histogram(df_clean, x=target_col, nbins=10, template="plotly_dark", color_discrete_sequence=['#00CC96'])
-                    fig_after.update_layout(bargap=0.1)
-                    st.plotly_chart(fig_after, use_container_width=True)
+    # 3. Persistent Display Logic
+    # Check if data exists in memory, regardless of button press
+    if st.session_state.df_clean is not None:
+        
+        # Retrieve from memory
+        df_clean = st.session_state.df_clean
+        report = st.session_state.report
+        # We need to re-instantiate or retrieve the kit to run evaluation
+        if "repair_kit" in st.session_state:
+            repair_kit = st.session_state.repair_kit
+        else:
+            repair_kit = MachineLearningRepairKit()
 
-            # 4. Download
-            csv = df_clean.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                "📥 Download Clean CSV",
-                csv,
-                "clean_data.csv",
-                "text/csv",
-                key='download-csv'
-            )
+        with col2:
+            st.subheader("✅ Repaired Data")
+            st.write(f"Shape: {df_clean.shape}")
+            st.dataframe(df_clean.head(10))
+            
+            # Metrics Display
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Missing Fixed", report['missing_fixed'])
+            m2.metric("Outliers Removed", report['outliers_detected'])
+            m3.metric("Rows Retained", f"{report['final_shape'][0]}")
+
+        # 4. Benchmarking
+        st.divider()
+        st.subheader("🧪 Model Comprison: Baseline vs. Advanced Pipeline")
+        st.info("Two models will be trained to predict a target variable. Lower Error (MAE) is better.")
+        
+        # Select Target
+        numeric_cols = df_clean.select_dtypes(include=['number']).columns
+        target_col = st.selectbox("Select Target Variable to Predict (e.g., Salary)", numeric_cols)
+        
+        if st.button("⚔️ Fight!", type="primary"):
+            if len(df_raw) < 10:
+                st.warning("⚠️ Dataset is very small. Results might be volatile!")
+            
+            with st.spinner("Training models..."):
+                # the original raw data to the evaluate function
+                metrics = repair_kit.evaluate_model(df_raw, target_col)
+            
+            if "error" in metrics:
+                st.error(metrics["error"])
+            else:
+                # Display metrics side-by-side
+                res_col1, res_col2 = st.columns(2)
+                
+                with res_col1:
+                    st.markdown("### Baseline Model")
+                    st.caption("Strategy: Mean Imputation + Linear Regression")
+                    st.metric("Mean Absolute Error", f"{metrics['baseline_mae']:.2f}")
+                    st.metric("R² Score", f"{metrics['baseline_r2']:.2f}")
+                
+                with res_col2:
+                        st.markdown("### Advanced Pipeline")
+                        st.caption("Strategy: Iterative RF Imputation + Outlier Removal + Random Forest")
+                        
+                        delta_mae = metrics['advanced_mae'] - metrics['baseline_mae']
+                        st.metric(
+                            "Mean Absolute Error", 
+                            f"{metrics['advanced_mae']:.2f}", 
+                            delta=f"{delta_mae:.2f}", 
+                            delta_color="inverse"
+                        )
+                        
+                        delta_r2 = metrics['advanced_r2'] - metrics['baseline_r2']
+                        st.metric(
+                            "R² Score", 
+                            f"{metrics['advanced_r2']:.2f}", 
+                            delta=f"{delta_r2:.2f}"
+                        )
+                
+                # Chart
+                st.markdown("#### Performance Comparison")
+                chart_data = pd.DataFrame({
+                    "Model": ["Baseline", "Advanced Pipeline"],
+                    "Error (MAE) - Lower is Better": [metrics['baseline_mae'], metrics['advanced_mae']]
+                })
+                fig = px.bar(chart_data, x="Model", y="Error (MAE) - Lower is Better", color="Model", 
+                             color_discrete_map={"Baseline": "#EF553B", "Advanced Pipeline": "#00CC96"})
+                st.plotly_chart(fig, use_container_width=True)
+        
+        # 5. Download
+        csv = df_clean.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            "📥 Download Clean CSV",
+            csv,
+            "clean_data.csv",
+            "text/csv",
+            key='download-csv'
+        )
