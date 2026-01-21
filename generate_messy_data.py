@@ -7,67 +7,66 @@ NUM_ROWS = 300
 np.random.seed(42)
 
 def generate_messy_data():
-    print("Generating synthetic messy data...")
+    print("Generating synthetic messy data (Allowed Start Age: 18)...")
     
-    # 1. Base Data Generation (Correlated)
+    # 1. Base Data Generation
     # Experience (0 to 40 years)
     experience = np.random.normal(loc=10, scale=8, size=NUM_ROWS)
-    experience = np.abs(experience)  # No negative years
+    experience = np.abs(experience)
     
-    # Age (correlated with experience + randomness)
-    age = 22 + experience + np.random.normal(0, 3, NUM_ROWS)
+    # Age = 18 + Experience
+    # add random noise (-2 to +5) to account for gap years, career switches, etc.
+    # ensure Age is never LESS than (18 + Experience)
+    noise = np.random.uniform(low=0, high=10, size=NUM_ROWS) 
+    age = 18 + experience + noise
     
-    # Salary (Strongly correlated with experience)
-    # Base: 40k, + 3k per year of experience, + random noise
-    salary = 40000 + (experience * 3000) + np.random.normal(0, 5000, NUM_ROWS)
+    # CATEGORY 1: Department
+    depts = np.random.choice(["Support", "Engineering", "Management"], NUM_ROWS, p=[0.4, 0.4, 0.2])
     
-    # Credit Score (Weakly correlated with Age)
-    credit_score = 600 + (age * 2) + np.random.normal(0, 40, NUM_ROWS)
-    credit_score = np.clip(credit_score, 300, 850) # Clip to realistic range
+    # CATEGORY 2: Gender
+    genders = np.random.choice(["Male", "Female", "Non-Binary"], NUM_ROWS, p=[0.48, 0.48, 0.04])
+    
+    # Salary logic
+    salary = []
+    for i in range(NUM_ROWS):
+        base = 30000
+        if depts[i] == "Engineering": base = 60000
+        if depts[i] == "Management": base = 90000
+        
+        sal = base + (experience[i] * 2000) + np.random.normal(0, 5000)
+        salary.append(sal)
+    
+    salary = np.array(salary)
 
-    # Create DataFrame
     df = pd.DataFrame({
         "Age": age,
         "Experience": experience,
-        "Salary": salary,
-        "Credit_Score": credit_score
+        "Department": depts, 
+        "Gender": genders,
+        "Salary": salary
     })
 
-    # Rounding for realism
     df = df.round(1)
 
     # 2. Injecting The "Mess"
     
-    # A. Inject Missing Values (NaN)
-    # Randomly remove 15% of Age and 10% of Salary
+    # A. Missing Values
     df.loc[df.sample(frac=0.15).index, "Age"] = np.nan
     df.loc[df.sample(frac=0.10).index, "Salary"] = np.nan
+    df.loc[df.sample(frac=0.10).index, "Department"] = np.nan
+    df.loc[df.sample(frac=0.10).index, "Gender"] = np.nan
 
-    # B. Inject Text Errors
-    # Add garbage strings to numeric columns
-    error_indices = df.sample(n=5).index
-    df.loc[error_indices, "Salary"] = "Pending"
+    # B.Contextual Outlier
+    # create someone who claims to be 20 but has 15 years experience
+    df.loc[10, "Age"] = 20
+    df.loc[10, "Experience"] = 15 
     
-    error_indices_2 = df.sample(n=3).index
-    df.loc[error_indices_2, "Credit_Score"] = "Error_404"
-
-    # C. Inject Extreme Outliers (The "IsolationForest" Test)
-    df.loc[NUM_ROWS-1, "Salary"] = 500000000 
+    # C. Extreme Outliers
+    df.loc[NUM_ROWS-1, "Salary"] = 500000000
     df.loc[NUM_ROWS-1, "Age"] = 150
     
-
-    df.loc[NUM_ROWS-2, "Age"] = 5
-    df.loc[NUM_ROWS-2, "Salary"] = 200000
-    
-
-    df.loc[NUM_ROWS-3, "Credit_Score"] = 5000
-
     print("Data generated successfully.")
-    print(f"Shape: {df.shape}")
-    print("Saving to 'large_messy_data.csv'...")
-    
-    df.to_csv("large_messy_data.csv", index=False)
-    print("Done! 'large_messy_data.csv' created")
+    df.to_csv("large_messy_data_v3.csv", index=False)
 
 if __name__ == "__main__":
     generate_messy_data()
