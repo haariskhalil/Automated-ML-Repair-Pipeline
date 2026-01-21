@@ -32,9 +32,9 @@ Unlike standard cleaning scripts that drop missing rows or fill them with static
 
 ### 4. Human-in-the-Loop Audit
 * **Interactive UI:** Users can review detected outliers in a dedicated "Audit Box."
-* **Restore Capability:** If a valid data point (e.g., a "Non-Binary" gender or a "Young Genius") is flagged as an outlier, the user can check a box and **Restore** it to the clean dataset with a single click.
+* **Restore Capability:** If a valid data point is flagged as an outlier, the user can check a box and **Restore** it to the clean dataset with a single click.
 
-### 5. The "Showdown" Benchmark
+### 5. The Benchmark
 * **Validation:** Automatically trains two models to prove the pipeline's value:
     1.  **Baseline:** Standard Mean Imputation + Linear Regression.
     2.  **Advanced:** The Self-Healing Pipeline + Random Forest Regressor.
@@ -55,21 +55,21 @@ The pipeline utilizes a specific ensemble of models to achieve "Self-Healing":
 | **Imputation** | `IterativeImputer` with `RandomForestRegressor` | Predicts missing values by modeling them as a function of other features (e.g., predicting *Salary* based on *Experience* and *Dept*). |
 | **Outlier Detection** | `IsolationForest` | An unsupervised algorithm that isolates anomalies by randomly partitioning the feature space. Scores are used to flag "impossible" rows. |
 | **Encoding** | `OrdinalEncoder` | Safely transforms categorical text (e.g., "HR", "Sales") into integer arrays for ML processing and decodes them back for the user. |
-| **Benchmarking** | `LinearRegression` vs `RandomForestRegressor` | The "Showdown" module trains these two models on the fly to calculate the performance gap (MAE/R²) between the raw and repaired data. |
+| **Benchmarking** | `LinearRegression` vs `RandomForestRegressor` | This module trains these two models on the fly to calculate the performance gap (MAE/R²) between the raw and repaired data. |
 
 ## 🛠️ Architecture
 
 The pipeline follows a strict `Encode -> Impute -> Filter -> Decode` logic to ensure mathematical stability:
 
 1.  **Ingestion:** Raw CSV is uploaded via Streamlit.
-2.  **Encoding:** * Text columns are mapped to integers (e.g., HR=0, Sales=1) using `OrdinalEncoder`.
+2.  **Encoding:** Text columns are mapped to integers (e.g., HR=0, Sales=1) using `OrdinalEncoder`.
     * Encoders are stored in memory to allow reverse-translation later.
-3.  **Imputation (The Builder):** * `IterativeImputer` cycles through features, using a **Random Forest** to model missing data as a function of other features.
-4.  **Outlier Detection (The Bouncer):** * `IsolationForest` assigns an "Anomaly Score" to every row.
+3.  **Imputation:** `IterativeImputer` cycles through features, using a **Random Forest** to model missing data as a function of other features.
+4.  **Outlier Detection:** `IsolationForest` assigns an "Anomaly Score" to every row.
     * The worst 5% (configurable) are flagged.
-5.  **Reasoning Extraction:** * The system analyzes the mathematical contribution of each feature to the Anomaly Score to generate human-readable explanations.
-6.  **Decoding:** * Cleaned integer data is mapped back to original text labels.
-7.  **Delivery:** * User downloads the clean CSV or restores outliers manually.
+5.  **Reasoning Extraction:** The system analyzes the mathematical contribution of each feature to the Anomaly Score to generate human-readable explanations.
+6.  **Decoding:** Cleaned integer data is mapped back to original text labels.
+7.  **Delivery:** User downloads the clean CSV or restores outliers manually.
 
 ---
 
@@ -107,6 +107,6 @@ streamlit run app.py
 
 ## 🔮 Future Roadmap
 
-* **Classification Support:** Enable the "Showdown" to evaluate categorical targets (Accuracy/F1-Score).
+* **Classification Support:** Enable the Benchmarking module to evaluate categorical targets (Accuracy/F1-Score).
 * **Deep Learning Imputer:** Experiment with Autoencoders for complex non-linear imputation.
 * **API Mode:** Expose the processor.py logic via FastAPI for headless integration.
