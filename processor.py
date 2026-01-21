@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.experimental import enable_iterative_imputer 
+from sklearn.experimental import enable_iterative_imputer  # noqa
 from sklearn.impute import IterativeImputer, SimpleImputer
 from sklearn.ensemble import IsolationForest, RandomForestRegressor
 from sklearn.linear_model import LinearRegression
@@ -14,14 +14,14 @@ class MachineLearningRepairKit:
         """
         Initializes the repair kit with advanced ML models.
         """
-        # predicts missing values based on other columns
+        # Predicts missing values based on other columns
         self.imputer = IterativeImputer(
             estimator=RandomForestRegressor(n_jobs=-1),
             max_iter=10,
             random_state=42
         )
         
-        # identifies and flags data outliers
+        # Identifies and flags data outliers
         self.outlier_detector = IsolationForest(contamination=0.05, random_state=42)
         
         # To scale data before outlier detection
@@ -31,6 +31,7 @@ class MachineLearningRepairKit:
         self.report = {
             "missing_fixed": 0,
             "outliers_detected": 0,
+            "outliers": pd.DataFrame(), # Initialize empty storage
             "original_shape": (0,0),
             "final_shape": (0,0)
         }
@@ -68,11 +69,15 @@ class MachineLearningRepairKit:
         
         self.report["outliers_detected"] = np.sum(outlier_labels == -1)
 
+        # Capture the specific rows flagged as outliers for review
+        self.report["outliers"] = df_imputed[outlier_labels == -1]
+
         # 4. Filter the dataset
         df_final = df_imputed[outlier_labels == 1]
         
         # Rounding
         df_final = df_final.round(1)
+        self.report["outliers"] = self.report["outliers"].round(1)
         
         self.report["final_shape"] = df_final.shape
 
@@ -82,21 +87,18 @@ class MachineLearningRepairKit:
         """
         Trains two models to predict the 'target_col':
         1. Baseline: Simple Mean Imputation + Linear Regression
-        2. Advanced: Your Cleaned Data + Random Forest
+        2. Advanced: Advanced Cleaned Data + Random Forest
         """
         # Separate Features (X) and Target (y)
         X = df.drop(columns=[target_col])
         y = df[target_col]
         
-
-        # We must force the TARGET to be numeric. "error" becomes NaN.
+        # force the TARGET to be numeric. "error" becomes NaN.
         y = pd.to_numeric(y, errors='coerce')
-
         
         # Force numeric on X for the baseline to work
         X = self._force_numeric(X)
         
-
         # For X, we fill missing with MEAN.
         clean_idx = ~y.isna()
         X_base = X[clean_idx]
@@ -114,8 +116,7 @@ class MachineLearningRepairKit:
         baseline_model.fit(X_train, y_train)
         y_pred_base = baseline_model.predict(X_test)
         
-
-        # run the internal repair to get a clean dataset first
+        # Run the internal repair to get a clean dataset first
         df_clean, _ = self.repair(df)
         
         if target_col not in df_clean.columns:

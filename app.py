@@ -30,7 +30,8 @@ if uploaded_file is not None:
         st.write(f"Shape: {df_raw.shape}")
         # Show null counts
         null_counts = df_raw.isnull().sum()
-        st.dataframe(df_raw.head(10))
+        # Removed .head(10) to allow scrolling through full dataset
+        st.dataframe(df_raw, height=400)
         st.caption(f"Total Missing Values: {null_counts.sum()}")
 
     # 2. The Execution Trigger
@@ -46,18 +47,17 @@ if uploaded_file is not None:
             # Save to Session State
             st.session_state.df_clean = df_clean
             st.session_state.report = report
-            st.session_state.repair_kit = repair_kit # Save the object itself to reuse methods
+            st.session_state.repair_kit = repair_kit 
             
             st.success("Pipeline Execution Complete")
 
     # 3. Persistent Display Logic
-    # Check if data exists in memory, regardless of button press
     if st.session_state.df_clean is not None:
         
         # Retrieve from memory
         df_clean = st.session_state.df_clean
         report = st.session_state.report
-        # We need to re-instantiate or retrieve the kit to run evaluation
+        
         if "repair_kit" in st.session_state:
             repair_kit = st.session_state.repair_kit
         else:
@@ -66,7 +66,7 @@ if uploaded_file is not None:
         with col2:
             st.subheader("✅ Repaired Data")
             st.write(f"Shape: {df_clean.shape}")
-            st.dataframe(df_clean.head(10))
+            st.dataframe(df_clean, height=400)
             
             # Metrics Display
             m1, m2, m3 = st.columns(3)
@@ -74,9 +74,15 @@ if uploaded_file is not None:
             m2.metric("Outliers Removed", report['outliers_detected'])
             m3.metric("Rows Retained", f"{report['final_shape'][0]}")
 
+        # Outlier Audit Section
+        if report['outliers_detected'] > 0:
+            with st.expander("🔍 Audit: Detected Outliers (Removed Rows)", expanded=False):
+                st.warning("The following rows were identified as statistical anomalies and removed from the clean dataset:")
+                st.dataframe(report['outliers'], use_container_width=True)
+
         # 4. Benchmarking
         st.divider()
-        st.subheader("🧪 Model Comprison: Baseline vs. Advanced Pipeline")
+        st.subheader("🧪 Model Comparison: Baseline vs. Advanced Pipeline")
         st.info("Two models will be trained to predict a target variable. Lower Error (MAE) is better.")
         
         # Select Target
@@ -88,7 +94,6 @@ if uploaded_file is not None:
                 st.warning("⚠️ Dataset is very small. Results might be volatile!")
             
             with st.spinner("Training models..."):
-                # the original raw data to the evaluate function
                 metrics = repair_kit.evaluate_model(df_raw, target_col)
             
             if "error" in metrics:
